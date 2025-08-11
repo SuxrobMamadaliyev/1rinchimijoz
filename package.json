@@ -1,21 +1,22 @@
 {
-  "dependencies": {
-    "dotenv": "^17.2.1",
-    "telegraf": "^4.16.3",
-    "telegraf-session-local": "^2.1.1"
-  }
-}
-{
-  "name": "my-bot",
+  "name": "telegraf-bot",
   "version": "1.0.0",
+  "description": "Telegraf bot deployed on Render",
   "main": "bot_new.js",
+  "scripts": {
+    "start": "node bot_new.js",
+    "dev": "nodemon bot_new.js"
+  },
+  "keywords": ["telegraf", "bot", "telegram"],
+  "author": "",
+  "license": "ISC",
   "dependencies": {
     "dotenv": "^17.2.1",
     "telegraf": "^4.16.3",
     "telegraf-session-local": "^2.1.1"
   },
-  "scripts": {
-    "start": "node bot_new.js"
-  }
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "type": "commonjs"
 }
-
