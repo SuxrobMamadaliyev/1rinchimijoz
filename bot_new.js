@@ -4002,7 +4002,7 @@ bot.on('text', async (ctx) => {
 // O'yin narxlari menyusi va handlerlari o'chirildi// HTTP server for keeping the bot alive on hosting services
 const express = require('express');
 const app = express();
-const path = require('path');
+
 
 // Middleware
 app.use(express.json());
