@@ -167,16 +167,11 @@ const PP_PRICES = {
   '100000': 235242
 };
 
-// Session middleware barcha sozlamalar uchun
 bot.use(session({
   defaultSession: () => ({
-    // Almaz sotib olish uchun
     almax: { step: null, amount: null },
-    // Balans to'ldirish uchun
     topup: { step: null, amount: null },
-    // Buyurtma uchun
     buying: null,
-    // Promokodlar uchun
     awaitingPromo: false,
     awaitingNewPromo: false,
     awaitingFindUser: false,
@@ -2328,12 +2323,15 @@ bot.action('admin:channelMenu', async (ctx) => {
   await sendAdminChannelMenu(ctx);
 });
 
-// To'ldirish summasini qabul qilish
-bot.on('text', async (ctx, next) => {
-  // Agar topup jarayoni boshlamagan bo'lsa, keyingi middlewarega o'tkazamiz
+bot.use(async (ctx, next) => {
   if (!ctx.session.topup) {
-    return next();
+    return next();  // topup jarayoni boshlanmagan, keyingi middlewarega o‘tish
   }
+  // Agar topup jarayoni boshlangan bo‘lsa, bu yerda ishlov berish mumkin
+
+  return next();  // keyingi middlewarega o‘tish
+});
+
 
   const userId = ctx.from.id;
   const text = ctx.message.text.trim();
@@ -3362,8 +3360,15 @@ bot.use(async (ctx, next) => {
   }
   
   // Aks holda keyingi middlewarega o'tamiz
-  return next();
+bot.use(async (ctx, next) => {
+  if (!ctx.session.buying) {
+    return next();  // buyurtma jarayoni boshlanmagan, keyingi middlewarega o‘tish
+  }
+  // Buyurtma jarayoni bo‘lsa, bu yerda ishlov berish mumkin
+
+  return next();  // keyingi middlewarega o‘tish
 });
+
 
 // Kanal ma'lumotlarini o'qish
 function getChannels() {
