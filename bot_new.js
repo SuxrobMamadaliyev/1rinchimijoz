@@ -4048,4 +4048,3 @@ bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
     bot.stop('SIGTERM');
     shutdown();
   });
-}
