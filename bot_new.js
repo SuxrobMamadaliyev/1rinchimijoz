@@ -3999,7 +3999,7 @@ bot.on('text', async (ctx) => {
   }
 });
 
-/ Webhook configuration for Render deployment
+//Webhook configuration for Render deployment
 const express = require('express');
 const app = express();
 const url = require('url');
