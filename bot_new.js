@@ -1,3 +1,6 @@
+// @ts-nocheck
+'use strict';
+
 const { Telegraf, Markup, session } = require('telegraf');
 require('dotenv').config();
 const fs = require('fs');
@@ -2323,50 +2326,43 @@ bot.action('admin:channelMenu', async (ctx) => {
   await sendAdminChannelMenu(ctx);
 });
 
+// Top-up bosqichlarini boshqarish uchun middleware
 bot.use(async (ctx, next) => {
   if (!ctx.session.topup) {
-    return next();  // topup jarayoni boshlanmagan, keyingi middlewarega o‘tish
+    return next();  // topup jarayoni boshlanmagan, keyingi middlewarega o'tish
   }
-  // Agar topup jarayoni boshlangan bo‘lsa, bu yerda ishlov berish mumkin
+  
+  // Agar topup jarayoni boshlandi va bu xabar matn bo'lsa
+  if (ctx.message && ctx.message.text) {
+    if (ctx.session.topup.step === 'amount') {
+      const userId = ctx.from.id;
+      const text = ctx.message.text.trim();
+      const amount = parseInt(text);
+      
+      if (isNaN(amount) || amount < 1000) {
+        await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
+        return;
+      }
 
-  return next();  // keyingi middlewarega o‘tish
-});
+      ctx.session.topup = {
+        step: 'method',
+        amount: amount
+      };
 
+      const keyboard = [
+        [Markup.button.callback('💳 Uzcard', 'topup:method:uzcard')],
+        [Markup.button.callback('💳 Humo', 'topup:method:humo')],
+        [Markup.button.callback('⬅️ Orqaga', 'back:account')]
+      ];
 
-  const userId = ctx.from.id;
-  const text = ctx.message.text.trim();
-
-  // To'ldirish summasi
-  if (ctx.session.topup.step === 'amount') {
-    const amount = parseInt(text);
-    if (isNaN(amount) || amount < 1000) {
- bot.hears('topup', async (ctx) => {
-  if (amount < 1000) {
-    await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
-    return;
+      await sendOrUpdateMenu(ctx, `💳 To'lov usulini tanlang:\n💵 Summa: ${amount.toLocaleString()} so'm`, keyboard);
+      return;
+    }
   }
-
-  ctx.session.topup = {
-    step: 'method',
-    amount: amount
-  };
+  
+  // Boshqa hollarda keyingi middlewarega o'tish
+  return next();
 });
-
-
-    const keyboard = [
-      [Markup.button.callback('💳 Uzcard', 'topup:method:uzcard')],
-      [Markup.button.callback('💳 Humo', 'topup:method:humo')],
-      [Markup.button.callback('⬅️ Orqaga', 'back:account')]
-    ];
-
- bot.on('text', async (ctx, next) => {
-  if (/* shart */) {
-    await sendOrUpdateMenu(ctx, `💳 To'lov usulini tanlang:\n💵 Summa: ${amount.toLocaleString()} so'm`, keyboard);
-  } else {
-    return next();
-  }
-});
-
 
 // To'lov usulini tanlash
 bot.action(/topup:method:(.+)/, async (ctx) => {
@@ -3367,9 +3363,13 @@ bot.use(async (ctx, next) => {
   }
   
   // Aks holda keyingi middlewarega o'tamiz
+  return next();
+});
+
+// Buyurtma jarayoni uchun middleware
 bot.use(async (ctx, next) => {
   if (!ctx.session.buying) {
-    return next();  // buyurtma jarayoni boshlanmagan, keyingi middlewarega o‘tish
+    return next();  // buyurtma jarayoni boshlanmagan, keyingi middlewarega o'tish
   }
   // Buyurtma jarayoni bo‘lsa, bu yerda ishlov berish mumkin
 
