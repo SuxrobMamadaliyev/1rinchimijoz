@@ -1,7 +1,7 @@
 // @ts-nocheck
 'use strict';
 
-const { Telegraf, Markup, session } = require('telegraf');
+const { Telegraf, Markup } = require('telegraf');
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
