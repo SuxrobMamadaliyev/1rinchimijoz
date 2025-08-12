@@ -4000,80 +4000,48 @@ bot.on('text', async (ctx) => {
 });
 
 // bot_new.js
-
 require('dotenv').config();
+const { Telegraf } = require('telegraf');
 const express = require('express');
+
+const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
-// Middleware
 app.use(express.json());
 
-// Simple status check route
+// Status check
+app.get('/', (req, res) => {
+  res.send('Bot ishlayapti 🚀');
+});
+
 app.get('/status', (req, res) => {
   res.json({ status: 'Bot ishlayapti 🚀', timestamp: new Date() });
 });
 
-// 404 handler
-app.use((req, res) => {
-  res.status(404).json({ error: 'Sahifa topilmadi' });
-});
-
-// Bot command (test)
-bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
-
-// Webhook va polling rejimini farqlash
-const PORT = process.env.PORT || 3000;
-const server = app.listen(PORT, () => {
-  console.log(`HTTP Server ${PORT} portida ishlayapti`);
-
-  if (process.env.RENDER) {
-    // Render serverida webhook URL
-    const webhookUrl =
-      process.env.RENDER_EXTERNAL_URL ||
-      `https://${process.env.RENDER_SERVICE_NAME}.onrender.com`;
-
-    bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.BOT_TOKEN}`)
-      .then(() => console.log('✅ Webhook muvaffaqiyatli o‘rnatildi'))
-      .catch((err) => console.error('❌ Webhook o‘rnatishda xatolik:', err));
-  }
-});
-
 // Webhook endpoint
 app.post(`/bot${process.env.BOT_TOKEN}`, (req, res) => {
-  bot.handleUpdate(req.body, res);
+  bot.handleUpdate(req.body);
+  res.status(200).end();
 });
 
+const PORT = process.env.PORT || 3000;
+
 if (process.env.RENDER) {
-  console.log('🌐 Webhook rejimida ishga tushirilmoqda...');
+  // Webhook rejimida ishga tushirish
+  const webhookUrl = process.env.RENDER_EXTERNAL_URL;
+  bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.BOT_TOKEN}`)
+    .then(() => console.log('✅ Webhook o‘rnatildi:', `${webhookUrl}/bot${process.env.BOT_TOKEN}`))
+    .catch(err => console.error('❌ Webhook xatolik:', err));
 
-  const shutdown = async () => {
-    console.log('⏳ Server yopilmoqda...');
-    try {
-      await bot.telegram.deleteWebhook();
-      console.log('✅ Webhook muvaffaqiyatli o‘chirildi');
-    } catch (err) {
-      console.error('❌ Webhook o‘chirishda xatolik:', err);
-    }
-    server.close(() => {
-      console.log('🔴 Server yopildi');
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGINT', shutdown);
-  process.on('SIGTERM', shutdown);
+  app.listen(PORT, () => console.log(`🌐 Server ${PORT} portida ishga tushdi`));
 
 } else {
-  console.log('💻 Polling rejimida ishga tushirilmoqda...');
+  // Localda polling rejimi
   bot.launch();
+  console.log('💻 Polling rejimi ishga tushdi');
+}
 
-  const shutdown = () => {
-    console.log('⏳ Server yopilmoqda...');
-    server.close(() => {
-      console.log('🔴 Server yopildi');
-      process.exit(0);
-    });
-  };
+bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
 
   process.on('SIGINT', () => {
     bot.stop('SIGINT');
