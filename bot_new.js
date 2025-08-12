@@ -3999,7 +3999,56 @@ bot.on('text', async (ctx) => {
   }
 });
 
-// O'yin narxlari menyusi va handlerlari o'chirildi
+// O'yin narxlari menyusi va handlerlari o'chirildi// HTTP server for keeping the bot alive on hosting services
+const express = require('express');
+const app = express();
+const path = require('path');
+
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
+
+// Routes
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.get('/status', (req, res) => {
+  res.json({ status: 'Bot ishlayapti 🚀', timestamp: new Date() });
+});
+
+// Error handling
+app.use((req, res) => {
+  res.status(404).json({ error: 'Sahifa topilmadi' });
+});
+
+// Start the HTTP server
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () => {
+  console.log(`HTTP Server ${PORT} portida ishlayapti`);
+});
+
+// Start the bot
+bot.launch();
+
+// Handle graceful shutdown
+const shutdown = () => {
+  console.log('Server yopilmoqda...');
+  server.close(() => {
+    console.log('Server yopildi');
+    process.exit(0);
+  });};
+
+process.on('SIGINT', () => {
+  bot.stop('SIGINT');
+  shutdown();
+});
+
+process.on('SIGTERM', () => {
+  bot.stop('SIGTERM');
+  shutdown();
+});
+
 
 bot.launch();
 
