@@ -16,7 +16,13 @@ const localSession = new LocalSession({
   database: 'sessions.json',
   // Default session ma'lumotlari
   defaultSession: () => ({
-    // Bu yerda default session ma'lumotlari bo'ladi
+    almax: { step: null, amount: null },
+    topup: { step: null, amount: null },
+    buying: null,
+    awaitingPromo: false,
+    awaitingNewPromo: false,
+    awaitingFindUser: false,
+    awaitingBroadcast: false
   })
 });
 
@@ -175,17 +181,7 @@ const PP_PRICES = {
   '100000': 235242
 };
 
-bot.use(session({
-  defaultSession: () => ({
-    almax: { step: null, amount: null },
-    topup: { step: null, amount: null },
-    buying: null,
-    awaitingPromo: false,
-    awaitingNewPromo: false,
-    awaitingFindUser: false,
-    awaitingBroadcast: false
-  })
-}));
+// Session sozlamalari LocalSession orqali amalga oshirilmoqda
 
 // --- Almaz sotib olish bosqichlari ---
 bot.action('buy:almaz', async (ctx) => {
