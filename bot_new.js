@@ -2340,14 +2340,18 @@ bot.use(async (ctx, next) => {
   if (ctx.session.topup.step === 'amount') {
     const amount = parseInt(text);
     if (isNaN(amount) || amount < 1000) {
-      await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
-      return;
-    }
+ bot.hears('topup', async (ctx) => {
+  if (amount < 1000) {
+    await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
+    return;
+  }
 
-    ctx.session.topup = {
-      step: 'method',
-      amount: amount
-    };
+  ctx.session.topup = {
+    step: 'method',
+    amount: amount
+  };
+});
+
 
     const keyboard = [
       [Markup.button.callback('💳 Uzcard', 'topup:method:uzcard')],
