@@ -4000,7 +4000,6 @@ bot.on('text', async (ctx) => {
 });
 
 // bot_new.js
-require('dotenv').config();
 const express = require('express');
 const app = express();
 
