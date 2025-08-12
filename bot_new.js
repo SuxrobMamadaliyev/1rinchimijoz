@@ -4007,7 +4007,7 @@ bot.on('text', async (ctx) => {
 // bot_new.js
 const express = require('express');
 const app = express();
-
+require('dotenv').config();
 app.use(express.json());
 
 // Status check
@@ -4042,14 +4042,23 @@ if (process.env.RENDER) {
   console.log('💻 Polling rejimi ishga tushdi');
 }
 
+// Bot boshlanishida xush kelibsiz xabari
 bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
 
-  process.on('SIGINT', () => {
-    bot.stop('SIGINT');
-    shutdown();
-  });
+// shutdown funksiyasini aniqlash
+function shutdown() {
+  console.log('Bot to‘xtatilyapti...');
+  process.exit(0);
+}
 
-  process.on('SIGTERM', () => {
-    bot.stop('SIGTERM');
-    shutdown();
-  });
+// Signal xabarlarini tutib olish
+process.on('SIGINT', () => {
+  bot.stop('SIGINT');
+  shutdown();
+});
+
+process.on('SIGTERM', () => {
+  bot.stop('SIGTERM');
+  shutdown();
+});
+
