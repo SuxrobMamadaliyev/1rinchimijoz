@@ -4002,8 +4002,6 @@ bot.on('text', async (ctx) => {
 // bot_new.js
 require('dotenv').config();
 const express = require('express');
-
-const bot = new Telegraf(process.env.BOT_TOKEN);
 const app = express();
 
 app.use(express.json());
