@@ -3822,7 +3822,7 @@ bot.action('back:premium_stars', async (ctx) => {
 });
 
 // Text message handler for price updates and card info
-bot.on('text', async (ctx) => {
+bot.on('text', async (ctx, next) => {
   // Handle price updates
   if (ctx.session && ctx.session.editingPrice) {
     const { type, key } = ctx.session.editingPrice;
