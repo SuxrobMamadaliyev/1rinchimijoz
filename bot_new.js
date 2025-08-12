@@ -10,13 +10,18 @@ const path = require('path');
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
 // Session middleware
-const { session } = require('telegraf-session-local');
-bot.use(session({ 
-  // Default session data
+const LocalSession = require('telegraf-session-local');
+const localSession = new LocalSession({
+  // Session faylini saqlash joyi
+  database: 'sessions.json',
+  // Default session ma'lumotlari
   defaultSession: () => ({
-    // Add default session properties here
+    // Bu yerda default session ma'lumotlari bo'ladi
   })
-}));
+});
+
+// Session middleware'ini qo'shamiz
+bot.use(localSession.middleware());
 
 // Error handling middleware
 bot.catch((err, ctx) => {
