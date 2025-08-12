@@ -9,6 +9,21 @@ const path = require('path');
 // Botni yaratamiz
 const bot = new Telegraf(process.env.BOT_TOKEN);
 
+// Session middleware
+const { session } = require('telegraf-session-local');
+bot.use(session({ 
+  // Default session data
+  defaultSession: () => ({
+    // Add default session properties here
+  })
+}));
+
+// Error handling middleware
+bot.catch((err, ctx) => {
+  console.error('❌ Xatolik yuz berdi:', err);
+  return ctx.reply('❌ Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
+});
+
 // Global variables for user data
 if (!global.referrals) {
   global.referrals = {}; // Store referral data
@@ -103,22 +118,7 @@ process.on('SIGINT', () => {
   process.exit();
 });
 
-// Start komandasi
-bot.start(async (ctx) => {
-  try {
-    // Foydalanuvchi ma'lumotlarini saqlash
-    saveUserInfo(ctx.from);
-    
-    // Referral link orqali kelgan bo'lsa, uni qayta ishlash
-    await handleReferral(ctx);
-    
-    // Asosiy menyuni ko'rsatish
-    await sendMainMenu(ctx);
-  } catch (error) {
-    console.error('Start command error:', error);
-    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
-  }
-});
+// Start komandasi - moved to the bottom to avoid duplicate
 
 // Referral bonus amount
 const REFERRAL_BONUS = 100; // 100 so'm for each successful referral
@@ -4049,23 +4049,67 @@ if (process.env.RENDER) {
   console.log('💻 Polling rejimi ishga tushdi');
 }
 
-// Bot boshlanishida xush kelibsiz xabari
-bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
+// Start komandasi - asosiy ishchi funksiya
+bot.start(async (ctx) => {
+  try {
+    // Foydalanuvchi ma'lumotlarini saqlash
+    saveUserInfo(ctx.from);
+    
+    // Asosiy menyuni ko'rsatish
+    await sendMainMenu(ctx);
+    
+    // Xush kelibsiz xabari
+    await ctx.reply('Salom! Botga xush kelibsiz! 🚀');
+  } catch (error) {
+    console.error('Start command error:', error);
+    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
+  }
+});
 
 // shutdown funksiyasini aniqlash
-function shutdown() {
-  console.log('Bot to‘xtatilyapti...');
-  process.exit(0);
+async function shutdown() {
+  try {
+    console.log('Bot to\'xtatilyapti...');
+    // Save any pending data
+    saveUsers(users);
+    // Close database connections if any
+    if (db) await db.close();
+    console.log('Xotira tozalandi');
+  } catch (error) {
+    console.error('To\'xtatishda xatolik:', error);
+  } finally {
+    process.exit(0);
+  }
 }
 
 // Signal xabarlarini tutib olish
 process.on('SIGINT', () => {
-  bot.stop('SIGINT');
-  shutdown();
+  console.log('SIGINT signal qabul qilindi');
+  bot.stop('SIGINT')
+    .then(() => shutdown())
+    .catch(err => {
+      console.error('SIGINT xatolik:', err);
+      process.exit(1);
+    });
 });
 
 process.on('SIGTERM', () => {
-  bot.stop('SIGTERM');
-  shutdown();
+  console.log('SIGTERM signal qabul qilindi');
+  bot.stop('SIGTERM')
+    .then(() => shutdown())
+    .catch(err => {
+      console.error('SIGTERM xatolik:', err);
+      process.exit(1);
+    });
 });
 
+// Qo'shimcha xatoliklarni qo'llab-quvvatlash
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Qayta ishlanmagan rad etilgan va\'da:', promise, 'Sababi:', reason);
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Qo\'llab-quvvatlanmagan istisno:', error);
+  // Do not exit the process in production, just log the error
+  // process.exit(1);
+});
