@@ -2359,11 +2359,14 @@ bot.use(async (ctx, next) => {
       [Markup.button.callback('⬅️ Orqaga', 'back:account')]
     ];
 
+ bot.on('text', async (ctx, next) => {
+  if (/* shart */) {
     await sendOrUpdateMenu(ctx, `💳 To'lov usulini tanlang:\n💵 Summa: ${amount.toLocaleString()} so'm`, keyboard);
   } else {
     return next();
   }
 });
+
 
 // To'lov usulini tanlash
 bot.action(/topup:method:(.+)/, async (ctx) => {
