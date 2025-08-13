@@ -858,7 +858,7 @@ async function sendAccountMenu(ctx) {
 
 // --- Sozlamalar ---
 const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
-const ADMIN_USER = '@d1yor_salee';
+const ADMIN_USER = '@Garand_adminim';
 const ADMIN_IDS = [7990502958]; // admin ID lari
 
 // Track all users who have started the bot
@@ -3314,7 +3314,12 @@ bot.on('text', async (ctx) => {
     return;
   }
   
-  return next();
+  // Agar next funksiyasi mavjud bo'lsa, uni chaqiramiz
+  if (typeof next === 'function') {
+    return next();
+  }
+  // Aks holda, hech narsa qilmaymiz
+  return Promise.resolve();
 });
 
 // Obunani tekshirish
