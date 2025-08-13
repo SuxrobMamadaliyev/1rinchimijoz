@@ -167,11 +167,16 @@ const PP_PRICES = {
   '100000': 235242
 };
 
+// Session middleware barcha sozlamalar uchun
 bot.use(session({
   defaultSession: () => ({
+    // Almaz sotib olish uchun
     almax: { step: null, amount: null },
+    // Balans to'ldirish uchun
     topup: { step: null, amount: null },
+    // Buyurtma uchun
     buying: null,
+    // Promokodlar uchun
     awaitingPromo: false,
     awaitingNewPromo: false,
     awaitingFindUser: false,
@@ -477,7 +482,29 @@ async function sendMainMenu(ctx) {
       keyboard.push([Markup.button.callback('✅ Obunani tekshirish', 'check_subscription')]);
     }
     
-    await sendOrUpdateMenu(ctx, 'Bo\'limni tanlang:', keyboard);
+    // Always send a new message instead of editing to avoid message editing issues
+    try {
+      // Try to delete any existing message first
+      try {
+        if (ctx.callbackQuery) {
+          await ctx.deleteMessage();
+        }
+      } catch (e) {
+        // Ignore if we can't delete the old message
+      }
+      
+      // Send a new message with the main menu
+      await ctx.reply('Bo\'limni tanlang:', {
+        reply_markup: {
+          inline_keyboard: keyboard
+        },
+        parse_mode: 'Markdown'
+      });
+    } catch (error) {
+      console.error('Error sending main menu:', error);
+      // Fallback to a simple message if there's an error
+      await ctx.reply('Iltimos, asosiy menyuni qayta yuklash uchun /start buyrug\'ini bosing.');
+    }
   } catch (error) {
     console.error('sendMainMenu xatosi:', error);
     await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
@@ -858,7 +885,7 @@ async function sendAccountMenu(ctx) {
 
 // --- Sozlamalar ---
 const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
-const ADMIN_USER = '@Garand_adminim';
+const ADMIN_USER = '@d1yor_salee';
 const ADMIN_IDS = [7990502958]; // admin ID lari
 
 // Track all users who have started the bot
@@ -1232,7 +1259,24 @@ bot.action(/^back:(.+)/, async (ctx) => {
   try {
     switch (target) {
       case 'main':
-        await sendMainMenu(ctx);
+        // Clear any existing session states
+        if (ctx.session) {
+          ctx.session = {};
+        }
+        // Send a new message instead of editing to avoid message editing issues
+        try {
+          await sendMainMenu(ctx);
+          // Try to delete the old message if possible
+          try {
+            await ctx.deleteMessage();
+          } catch (e) {
+            // Ignore if we can't delete the old message
+          }
+        } catch (error) {
+          console.error('Error in main menu navigation:', error);
+          // Fallback to a simple message if there's an error
+          await ctx.reply('Iltimos, asosiy menyuni qayta yuklash uchun /start buyrug\'ini bosing.');
+        }
         break;
       case 'backToMain':
         await sendAdminPanel(ctx);
@@ -2323,10 +2367,10 @@ bot.action('admin:channelMenu', async (ctx) => {
   await sendAdminChannelMenu(ctx);
 });
 
-// Text message handler for topup amount
+// To'ldirish summasini qabul qilish
 bot.on('text', async (ctx, next) => {
-  // Skip if not in topup flow or not a direct message
-  if (!ctx.session.topup || !ctx.message || !ctx.message.text) {
+  // Agar topup jarayoni boshlamagan bo'lsa, keyingi middlewarega o'tkazamiz
+  if (!ctx.session.topup) {
     return next();
   }
 
@@ -3197,7 +3241,8 @@ bot.on('text', async (ctx) => {
   if (ctx.session.creatingPromo) {
     // Skip if it's a command
     if (ctx.message.text.startsWith('/')) {
-      return next();
+      // Skip command handling as we're in promo creation mode
+      return;
     }
     
     const { step, data } = ctx.session.creatingPromo;
@@ -3314,12 +3359,7 @@ bot.on('text', async (ctx) => {
     return;
   }
   
-  // Agar next funksiyasi mavjud bo'lsa, uni chaqiramiz
-  if (typeof next === 'function') {
-    return next();
-  }
-  // Aks holda, hech narsa qilmaymiz
-  return Promise.resolve();
+  return next();
 });
 
 // Obunani tekshirish
@@ -3363,15 +3403,6 @@ bot.use(async (ctx, next) => {
   
   // Aks holda keyingi middlewarega o'tamiz
   return next();
-});
-
-// Buyurtma jarayoni uchun middleware
-bot.use(async (ctx, next) => {
-  if (!ctx.session.buying) {
-    return next();  // buyurtma jarayoni boshlanmagan, keyingi middlewarega o'tish
-  }
-  // Buyurtma jarayoni bo'lsa, bu yerda ishlov berish mumkin
-  return next();  // keyingi middlewarega o'tish
 });
 
 // Kanal ma'lumotlarini o'qish
@@ -3819,7 +3850,7 @@ bot.action('back:premium_stars', async (ctx) => {
 });
 
 // Text message handler for price updates and card info
-bot.on('text', async (ctx) => {
+bot.on('text', async (ctx, next) => {
   // Handle price updates
   if (ctx.session && ctx.session.editingPrice) {
     const { type, key } = ctx.session.editingPrice;
@@ -4005,64 +4036,103 @@ bot.on('text', async (ctx) => {
     if (isAdmin(ctx)) {
       await showCardMenu(ctx);
     }
+    return;
   }
+  
+  // If we reach here, it means the message wasn't handled by any of the previous conditions
+  // and we should pass it to the next middleware if it exists
+  if (typeof next === 'function') {
+    return next();
+  }
+  return; // End middleware chain if next is not available
 });
 
-// bot_new.js
+// O'yin narxlari menyusi va handlerlari o'chirildi
+
+// Webhook configuration for Render deployment
 const express = require('express');
 const app = express();
-require('dotenv').config();
-app.use(express.json());
+const path = require('path');
+const url = require('url');
 
-// Status check
+// Middleware
+app.use(express.json());
+app.use(express.static('public'));
+
+// Routes
 app.get('/', (req, res) => {
-  res.send('Bot ishlayapti 🚀');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/status', (req, res) => {
   res.json({ status: 'Bot ishlayapti 🚀', timestamp: new Date() });
 });
 
+// Error handling
+app.use((req, res) => {
+  res.status(404).json({ error: 'Sahifa topilmadi' });
+});
+
+// Start the HTTP server
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () => {
+  console.log(`HTTP Server ${PORT} portida ishlayapti`);
+  
+  // Set webhook if in production
+  if (process.env.RENDER) {
+    const webhookUrl = process.env.RENDER_EXTERNAL_URL || `https://${process.env.RENDER_SERVICE_NAME}.onrender.com`;
+    bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.BOT_TOKEN}`)
+      .then(() => console.log('Webhook muvaffaqiyatli o\'rnatildi'))
+      .catch(err => console.error('Webhook o\'rnatishda xatolik:', err));
+  }
+});
+
 // Webhook endpoint
 app.post(`/bot${process.env.BOT_TOKEN}`, (req, res) => {
-  bot.handleUpdate(req.body);
-  res.status(200).end();
+  bot.handleUpdate(req.body, res);
 });
 
-const PORT = process.env.PORT || 3000;
-
+// Start the bot in webhook mode if in production, otherwise use polling for development
 if (process.env.RENDER) {
-  // Webhook rejimida ishga tushirish
-  const webhookUrl = process.env.RENDER_EXTERNAL_URL;
-  bot.telegram.setWebhook(`${webhookUrl}/bot${process.env.BOT_TOKEN}`)
-    .then(() => console.log('✅ Webhook o‘rnatildi:', `${webhookUrl}/bot${process.env.BOT_TOKEN}`))
-    .catch(err => console.error('❌ Webhook xatolik:', err));
+  // Webhook mode for production
+  console.log('Webhook rejimida ishga tushirilmoqda...');
+  // Remove webhook when shutting down
+  const shutdown = async () => {
+    console.log('Server yopilmoqda...');
+    try {
+      await bot.telegram.deleteWebhook();
+      console.log('Webhook muvaffaqiyatli o\'chirildi');
+    } catch (err) {
+      console.error('Webhook o\'chirishda xatolik:', err);
+    }
+    server.close(() => {
+      console.log('Server yopildi');
+      process.exit(0);
+    });
+  };
 
-  app.listen(PORT, () => console.log(`🌐 Server ${PORT} portida ishga tushdi`));
-
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 } else {
-  // Localda polling rejimi
+  // Polling mode for development
+  console.log('Polling rejimida ishga tushirilmoqda...');
   bot.launch();
-  console.log('💻 Polling rejimi ishga tushdi');
+  
+  const shutdown = () => {
+    console.log('Server yopilmoqda...');
+    server.close(() => {
+      console.log('Server yopildi');
+      process.exit(0);
+    });
+  };
+
+  process.on('SIGINT', () => {
+    bot.stop('SIGINT');
+    shutdown();
+  });
+
+  process.on('SIGTERM', () => {
+    bot.stop('SIGTERM');
+    shutdown();
+  });
 }
-
-// Bot boshlanishida xush kelibsiz xabari
-bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
-
-// shutdown funksiyasini aniqlash
-function shutdown() {
-  console.log('Bot to‘xtatilyapti...');
-  process.exit(0);
-}
-
-// Signal xabarlarini tutib olish
-process.on('SIGINT', () => {
-  bot.stop('SIGINT');
-  shutdown();
-});
-
-process.on('SIGTERM', () => {
-  bot.stop('SIGTERM');
-  shutdown();
-});
-
