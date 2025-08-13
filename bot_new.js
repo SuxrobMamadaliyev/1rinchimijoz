@@ -342,46 +342,41 @@ async function sendOrUpdateMenu(ctx, caption, keyboard) {
             console.log('Xabarni o\'chirib bo\'lmadi, yangi xabar yuborilmoqda...');
           }
           
-          // Rasm bilan yangi xabar yuborishga harakat qilamiz
-          try {
-            await ctx.replyWithPhoto({ source: MENU_IMAGE }, {
-              caption: greeting + caption,
+          // Yangi xabar yuboramiz
+          await ctx.replyWithPhoto(
+            { source: MENU_IMAGE },
+            {
+              caption: greeting + messageText,
               ...Markup.inlineKeyboard(keyboard),
               parse_mode: 'Markdown'
-            });
-            return;
-          } catch (photoError) {
-            console.error('Rasm bilan xabar yuborishda xatolik:', photoError);
-            // Rasm bilan yuborib bo'lmasa, oddiy xabar sifatida yuborishga harakat qilamiz
-            await ctx.reply(greeting + caption, {
-              ...Markup.inlineKeyboard(keyboard),
-              parse_mode: 'Markdown'
-            });
-          }
-        } catch (error) {
-          console.error('Asosiy menyu yuborishda xatolik:', error);
-          // Xatolik yuz bersa, oddiy xabar sifatida yuborishga harakat qilamiz
-          try {
-            await ctx.reply(greeting + caption, {
-              ...Markup.inlineKeyboard(keyboard),
-              parse_mode: 'Markdown'
-            });
-          } catch (e) {
-            console.error('Alternativ xabar yuborishda xatolik:', e);
-          }
+            }
+          );
+          return;
+        } catch (photoError) {
+          console.error('Rasm bilan xabar yuborishda xatolik:', photoError);
+          // Rasm bilan yuborib bo'lmasa, oddiy xabar sifatida yuborishga harakat qilamiz
+          await ctx.reply(messageText, {
+            ...Markup.inlineKeyboard(keyboard),
+            parse_mode: 'Markdown'
+          });
         }
       } else {
         // Boshqa menyular uchun mavjud xabarni tahrirlashga harakat qilamiz
         try {
           // Avvalgi xabarni tahrirlashga harakat qilamiz
           try {
-            await ctx.editMessageText(caption, {
-              ...Markup.inlineKeyboard(keyboard),
-              parse_mode: 'Markdown'
-            });
-            return;
+            // Agar message_id bo'lsa, tahrirlashga harakat qilamiz
+            if (ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.message_id) {
+              await ctx.editMessageText(messageText, {
+                ...Markup.inlineKeyboard(keyboard),
+                parse_mode: 'Markdown'
+              });
+              return;
+            } else {
+              throw new Error('Message ID not found');
+            }
           } catch (editError) {
-            console.error('Xabarni tahrirlashda xatolik:', editError);
+            console.error('Xabarni tahrirlashda xatolik:', editError.message);
             throw editError; // Keyingi catch blokiga o'tish uchun
           }
         } catch (e) {
@@ -389,13 +384,15 @@ async function sendOrUpdateMenu(ctx, caption, keyboard) {
           try {
             // Avvalgi xabarni o'chirishga harakat qilamiz (agar mavjud bo'lsa)
             try { 
-              await ctx.deleteMessage(); 
+              if (ctx.callbackQuery && ctx.callbackQuery.message && ctx.callbackQuery.message.message_id) {
+                await ctx.deleteMessage();
+              }
             } catch (deleteError) {
               console.log('Eski xabarni o\'chirib bo\'lmadi:', deleteError.message);
             }
             
             // Yangi xabar yuboramiz
-            await ctx.reply(caption, {
+            await ctx.reply(messageText, {
               ...Markup.inlineKeyboard(keyboard),
               parse_mode: 'Markdown'
             });
@@ -403,7 +400,7 @@ async function sendOrUpdateMenu(ctx, caption, keyboard) {
             console.error('Yangi xabar yuborishda xatolik:', sendError);
             // Oxirgi chora sifatida, oddiy xabar yuborishga harakat qilamiz
             try {
-              await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
+              await ctx.reply(messageText, Markup.inlineKeyboard(keyboard));
             } catch (finalError) {
               console.error('Yakuniy xabar yuborishda xatolik:', finalError);
             }
@@ -412,19 +409,42 @@ async function sendOrUpdateMenu(ctx, caption, keyboard) {
       }
     } else {
       // Yangi suhbat boshlanganda
-      if (caption === 'Bo\'limni tanlang:') {
-        try {
+      try {
+        if (messageText === 'Bo\'limni tanlang:') {
           const greeting = `Assalomu alaykum, ${ctx.from.first_name || 'foydalanuvchi'}!\n\n`;
-          await ctx.replyWithPhoto({ source: MENU_IMAGE }, {
-            caption: greeting + caption,
-            ...Markup.inlineKeyboard(keyboard)
+          try {
+            await ctx.replyWithPhoto(
+              { source: MENU_IMAGE },
+              {
+                caption: greeting + messageText,
+                ...Markup.inlineKeyboard(keyboard),
+                parse_mode: 'Markdown'
+              }
+            );
+          } catch (photoError) {
+            console.error('Rasm bilan xabar yuborishda xatolik:', photoError);
+            // Rasm bilan yuborib bo'lmasa, oddiy xabar sifatida yuborishga harakat qilamiz
+            await ctx.reply(greeting + messageText, {
+              ...Markup.inlineKeyboard(keyboard),
+              parse_mode: 'Markdown'
+            });
+          }
+        } else {
+          // Oddiy xabar yuborish
+          await ctx.reply(messageText, {
+            ...Markup.inlineKeyboard(keyboard),
+            parse_mode: 'Markdown'
           });
-        } catch (error) {
-          console.error('Rasm yuklanmadi:', error);
-          await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
         }
-      } else {
-        await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
+      } catch (error) {
+        console.error('Xabar yuborishda xatolik:', error);
+        
+        // Oxirgi urinish - oddiy xabar yuborishga harakat qilamiz
+        try {
+          await ctx.reply(messageText, Markup.inlineKeyboard(keyboard));
+        } catch (finalError) {
+          console.error('Yakuniy xabar yuborishda xatolik:', finalError);
+        }
       }
     }
   } catch (error) {
