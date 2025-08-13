@@ -862,8 +862,8 @@ async function sendAccountMenu(ctx) {
 
 // --- Sozlamalar ---
 const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
-const ADMIN_USER = '@Garand_adminim';
-const ADMIN_IDS = [5735723011 , 7990502958]; // admin ID lari
+const ADMIN_USER = '@d1yor_salee';
+const ADMIN_IDS = [7990502958]; // admin ID lari
 
 // Track all users who have started the bot
 if (!global.botUsers) {
@@ -2567,7 +2567,7 @@ bot.action(/confirm_payment:(\w+):(\d+):(\d+)/, async (ctx) => {
             '💰 Summa: ' + amount.toLocaleString() + ' so\'m\n' +
             '💳 Yangi balans: ' + userBalance.toLocaleString() + ' so\'m\n' +
             '🆔 Buyurtma ID: ' + paymentId + '\n\n' +
-            '📞 Murojaat uchun: @Garand_adminim';
+            '📞 Murojaat uchun: @d1yor_salee';
             
           await ctx.telegram.sendMessage(userId, simpleMessage);
           console.log('2-usul: Oddiy formatdagi xabar yuborildi');
@@ -2645,7 +2645,7 @@ bot.action(/reject_payment:(\w+):(\d+)/, async (ctx) => {
         '❌ *To\'lov rad etildi\!*\n\n' +
       '🆔 Buyurtma ID: `' + paymentId + '`\n' +
       '❌ Sabab: To\'lov ma\'lumotlari noto\'g\'ri yoki to\'lov amalga oshirilmagan\.\n\n' +
-      'ℹ️ Iltimos, to\'lovni qayta amalga oshiring yoki @Garand_adminim ga murojaat qiling\.',
+      'ℹ️ Iltimos, to\'lovni qayta amalga oshiring yoki @d1yor_salee ga murojaat qiling\.',
       { 
         parse_mode: 'MarkdownV2',
         reply_markup: {
@@ -2661,7 +2661,7 @@ bot.action(/reject_payment:(\w+):(\d+)/, async (ctx) => {
       try {
         await ctx.telegram.sendMessage(
           userId,
-          `❌ To'lov rad etildi! Iltimos, @Garand_adminim ga murojaat qiling.`,
+          `❌ To'lov rad etildi! Iltimos, @d1yor_salee ga murojaat qiling.`,
           { parse_mode: 'Markdown' }
         );
       } catch (e) {
@@ -2940,8 +2940,18 @@ bot.on('text', async (ctx) => {
   // Check if user is in the process of buying UC/PP or Premium/Stars
   if (ctx.session.buying && (ctx.session.buying.type === 'pubg_uc' || ctx.session.buying.type === 'pubg_pp' || ctx.session.buying.type === 'premium' || ctx.session.buying.type === 'stars')) {
     const { type, amount, price } = ctx.session.buying;
-    const username = ctx.message.text.trim();
+    let username = ctx.message.text.trim();
     let productType;
+    
+    // Usernameni tozalash va tekshirish
+    if (username.startsWith('@')) {
+        username = username.substring(1); // @ belgisini olib tashlash
+    }
+    
+    // Username tekshirish
+    if (!username || username.length < 3) {
+        return ctx.reply('❌ Noto\'g\'ri username kiritildi. Iltimos, to\'g\'ri formatda kiriting (masalan: @username yoki username)');
+    }
     if (type === 'pubg_uc') productType = 'UC';
     else if (type === 'pubg_pp') productType = 'PP';
     else if (type === 'premium') productType = 'Telegram Premium';
@@ -3021,7 +3031,7 @@ bot.on('text', async (ctx) => {
       `💳 To'lov: *${price.toLocaleString()} so'm*\n` +
       `💰 Joriy balans: *${userBalance.toLocaleString()} so'm*\n\n` +
       `🆔 Buyurtma raqami: *${orderId}*\n` +
-      `📞 Aloqa: @Garand_adminim\n\n` +
+      `📞 Aloqa: @d1yor_salee\n\n` +
       `💡 Iltimos, to'lovni tasdiqlash uchun adminlarimiz kuting.`,
       { parse_mode: 'Markdown' }
     );
@@ -3577,7 +3587,7 @@ bot.action(/confirm_pubg:(\w+):(\d+)/, async (ctx) => {
       `💳 To'lov: *${price.toLocaleString()} so'm*\n` +
       `💰 Qolgan balans: *${(userBalance - price).toLocaleString()} so'm*\n\n` +
       `📦 Buyurtmangiz tez orada yetkazib beriladi.\n` +
-      `📞 Savollar bo'lsa: @Garand_adminim`,
+      `📞 Savollar bo'lsa: @d1yor_salee`,
       { parse_mode: 'Markdown' }
     );
     
@@ -3642,7 +3652,7 @@ bot.action(/reject_pubg:(\w+):(\d+)/, async (ctx) => {
         `💰 Summa: *${order.price.toLocaleString()} so'm*\n` +
         `⏰ Sana: ${new Date().toLocaleString()}\n\n` +
         `ℹ Sabab: Admin tomonidan bekor qilindi\n` +
-        `📞 Savollar bo'lsa: @Garand_adminim`,
+        `📞 Savollar bo'lsa: @d1yor_salee`,
         { parse_mode: 'Markdown' }
       );
     } catch (error) {
