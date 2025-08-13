@@ -861,9 +861,9 @@ async function sendAccountMenu(ctx) {
 }
 
 // --- Sozlamalar ---
-const UC_CHANNEL_URL = 'https://t.me/suxa_cyber';
-const ADMIN_USER = '@suxacyber';
-const ADMIN_IDS = [5735723011]; // admin ID lari
+const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
+const ADMIN_USER = '@Garand_adminim';
+const ADMIN_IDS = [5735723011 , 7990502958]; // admin ID lari
 
 // Track all users who have started the bot
 if (!global.botUsers) {
@@ -2567,7 +2567,7 @@ bot.action(/confirm_payment:(\w+):(\d+):(\d+)/, async (ctx) => {
             '💰 Summa: ' + amount.toLocaleString() + ' so\'m\n' +
             '💳 Yangi balans: ' + userBalance.toLocaleString() + ' so\'m\n' +
             '🆔 Buyurtma ID: ' + paymentId + '\n\n' +
-            '📞 Murojaat uchun: @suxacyber';
+            '📞 Murojaat uchun: @Garand_adminim';
             
           await ctx.telegram.sendMessage(userId, simpleMessage);
           console.log('2-usul: Oddiy formatdagi xabar yuborildi');
@@ -2645,7 +2645,7 @@ bot.action(/reject_payment:(\w+):(\d+)/, async (ctx) => {
         '❌ *To\'lov rad etildi\!*\n\n' +
       '🆔 Buyurtma ID: `' + paymentId + '`\n' +
       '❌ Sabab: To\'lov ma\'lumotlari noto\'g\'ri yoki to\'lov amalga oshirilmagan\.\n\n' +
-      'ℹ️ Iltimos, to\'lovni qayta amalga oshiring yoki @suxacyber ga murojaat qiling\.',
+      'ℹ️ Iltimos, to\'lovni qayta amalga oshiring yoki @Garand_adminim ga murojaat qiling\.',
       { 
         parse_mode: 'MarkdownV2',
         reply_markup: {
@@ -2661,7 +2661,7 @@ bot.action(/reject_payment:(\w+):(\d+)/, async (ctx) => {
       try {
         await ctx.telegram.sendMessage(
           userId,
-          `❌ To'lov rad etildi! Iltimos, @suxacyber ga murojaat qiling.`,
+          `❌ To'lov rad etildi! Iltimos, @Garand_adminim ga murojaat qiling.`,
           { parse_mode: 'Markdown' }
         );
       } catch (e) {
@@ -3021,7 +3021,7 @@ bot.on('text', async (ctx) => {
       `💳 To'lov: *${price.toLocaleString()} so'm*\n` +
       `💰 Joriy balans: *${userBalance.toLocaleString()} so'm*\n\n` +
       `🆔 Buyurtma raqami: *${orderId}*\n` +
-      `📞 Aloqa: @suxacyber\n\n` +
+      `📞 Aloqa: @Garand_adminim\n\n` +
       `💡 Iltimos, to'lovni tasdiqlash uchun adminlarimiz kuting.`,
       { parse_mode: 'Markdown' }
     );
@@ -3577,7 +3577,7 @@ bot.action(/confirm_pubg:(\w+):(\d+)/, async (ctx) => {
       `💳 To'lov: *${price.toLocaleString()} so'm*\n` +
       `💰 Qolgan balans: *${(userBalance - price).toLocaleString()} so'm*\n\n` +
       `📦 Buyurtmangiz tez orada yetkazib beriladi.\n` +
-      `📞 Savollar bo'lsa: @suxacyber`,
+      `📞 Savollar bo'lsa: @Garand_adminim`,
       { parse_mode: 'Markdown' }
     );
     
@@ -3642,7 +3642,7 @@ bot.action(/reject_pubg:(\w+):(\d+)/, async (ctx) => {
         `💰 Summa: *${order.price.toLocaleString()} so'm*\n` +
         `⏰ Sana: ${new Date().toLocaleString()}\n\n` +
         `ℹ Sabab: Admin tomonidan bekor qilindi\n` +
-        `📞 Savollar bo'lsa: @suxacyber`,
+        `📞 Savollar bo'lsa: @Garand_adminim`,
         { parse_mode: 'Markdown' }
       );
     } catch (error) {
