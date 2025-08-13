@@ -1,39 +1,10 @@
-// @ts-nocheck
-'use strict';
-
-const { Telegraf, Markup } = require('telegraf');
+const { Telegraf, Markup, session } = require('telegraf');
 require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 
 // Botni yaratamiz
 const bot = new Telegraf(process.env.BOT_TOKEN);
-
-// Session middleware
-const LocalSession = require('telegraf-session-local');
-const localSession = new LocalSession({
-  // Session faylini saqlash joyi
-  database: 'sessions.json',
-  // Default session ma'lumotlari
-  defaultSession: () => ({
-    almax: { step: null, amount: null },
-    topup: { step: null, amount: null },
-    buying: null,
-    awaitingPromo: false,
-    awaitingNewPromo: false,
-    awaitingFindUser: false,
-    awaitingBroadcast: false
-  })
-});
-
-// Session middleware'ini qo'shamiz
-bot.use(localSession.middleware());
-
-// Error handling middleware
-bot.catch((err, ctx) => {
-  console.error('❌ Xatolik yuz berdi:', err);
-  return ctx.reply('❌ Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
-});
 
 // Global variables for user data
 if (!global.referrals) {
@@ -129,7 +100,22 @@ process.on('SIGINT', () => {
   process.exit();
 });
 
-// Start komandasi - moved to the bottom to avoid duplicate
+// Start komandasi
+bot.start(async (ctx) => {
+  try {
+    // Foydalanuvchi ma'lumotlarini saqlash
+    saveUserInfo(ctx.from);
+    
+    // Referral link orqali kelgan bo'lsa, uni qayta ishlash
+    await handleReferral(ctx);
+    
+    // Asosiy menyuni ko'rsatish
+    await sendMainMenu(ctx);
+  } catch (error) {
+    console.error('Start command error:', error);
+    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
+  }
+});
 
 // Referral bonus amount
 const REFERRAL_BONUS = 100; // 100 so'm for each successful referral
@@ -181,7 +167,17 @@ const PP_PRICES = {
   '100000': 235242
 };
 
-// Session sozlamalari LocalSession orqali amalga oshirilmoqda
+bot.use(session({
+  defaultSession: () => ({
+    almax: { step: null, amount: null },
+    topup: { step: null, amount: null },
+    buying: null,
+    awaitingPromo: false,
+    awaitingNewPromo: false,
+    awaitingFindUser: false,
+    awaitingBroadcast: false
+  })
+}));
 
 // --- Almaz sotib olish bosqichlari ---
 bot.action('buy:almaz', async (ctx) => {
@@ -375,36 +371,23 @@ async function sendOrUpdateMenu(ctx, caption, keyboard) {
         try {
           // Avvalgi xabarni tahrirlashga harakat qilamiz
           try {
-            // Check if we have a message to edit
-            if (ctx.update.callback_query && ctx.update.callback_query.message) {
-              await ctx.editMessageText(caption, {
-                ...Markup.inlineKeyboard(keyboard),
-                parse_mode: 'Markdown'
-              });
-              return;
-            } else {
-              throw new Error('No message to edit');
-            }
+            await ctx.editMessageText(caption, {
+              ...Markup.inlineKeyboard(keyboard),
+              parse_mode: 'Markdown'
+            });
+            return;
           } catch (editError) {
-            // If message is not modified, it's not an error we need to handle
-            if (editError.response && editError.response.description && 
-                editError.response.description.includes('message is not modified')) {
-              console.log('Xabar o\'zgartirilmadi, chunki yangi kontent eskisi bilan bir xil');
-              return;
-            }
-            console.error('Xabarni tahrirlashda xatolik:', editError.message);
+            console.error('Xabarni tahrirlashda xatolik:', editError);
             throw editError; // Keyingi catch blokiga o'tish uchun
           }
         } catch (e) {
           // Agar tahrirlab bo'lmasa, yangi xabar yuboramiz
           try {
             // Avvalgi xabarni o'chirishga harakat qilamiz (agar mavjud bo'lsa)
-            if (ctx.update.callback_query && ctx.update.callback_query.message) {
-              try { 
-                await ctx.deleteMessage(); 
-              } catch (deleteError) {
-                console.log('Eski xabarni o\'chirib bo\'lmadi:', deleteError.message);
-              }
+            try { 
+              await ctx.deleteMessage(); 
+            } catch (deleteError) {
+              console.log('Eski xabarni o\'chirib bo\'lmadi:', deleteError.message);
             }
             
             // Yangi xabar yuboramiz
@@ -876,7 +859,7 @@ async function sendAccountMenu(ctx) {
 // --- Sozlamalar ---
 const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
 const ADMIN_USER = '@d1yor_salee';
-const ADMIN_IDS = [5735723011, 7990502958]; // admin ID lari
+const ADMIN_IDS = [7990502958]; // admin ID lari
 
 // Track all users who have started the bot
 if (!global.botUsers) {
@@ -1846,16 +1829,8 @@ bot.action(/admin:(.+)/, async (ctx) => {
       
       try {
         // Get all users from the database
-        const allUsers = Object.keys(users);
+        const allUsers = Array.from(global.botUsers || new Set());
         const totalUsers = allUsers.length;
-        
-        // Count new users today
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const newUsersToday = allUsers.filter(userId => {
-          const user = users[userId];
-          return user && user.join_date && new Date(user.join_date) >= today;
-        }).length;
         
         // Count active users (users who used the bot in the last 30 days)
         const thirtyDaysAgo = new Date();
@@ -1869,6 +1844,8 @@ bot.action(/admin:(.+)/, async (ctx) => {
         const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.price || 0), 0);
         
         // Count today's orders and revenue
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
         const todayOrders = completedOrders.filter(order => {
           const orderDate = new Date(order.timestamp || 0);
           return orderDate >= today;
@@ -1883,7 +1860,6 @@ bot.action(/admin:(.+)/, async (ctx) => {
         // Format statistics message
         const statsMessage = `📊 *Bot Statistikasi*\n\n` +
           `👥 *Umumiy foydalanuvchilar:* ${totalUsers.toLocaleString()} ta\n` +
-          `🆕 *Bugungi yangi foydalanuvchilar:* ${newUsersToday} ta\n` +
           `🔄 *Faol foydalanuvchilar (30 kun):* ${Math.floor(totalUsers * 0.3).toLocaleString()} ta\n\n` +
           `📦 *Buyurtmalar:*\n` +
           `   • Jami: ${totalOrders.toLocaleString()} ta\n` +
@@ -2347,42 +2323,39 @@ bot.action('admin:channelMenu', async (ctx) => {
   await sendAdminChannelMenu(ctx);
 });
 
-// Top-up bosqichlarini boshqarish uchun middleware
-bot.use(async (ctx, next) => {
-  if (!ctx.session.topup) {
-    return next();  // topup jarayoni boshlanmagan, keyingi middlewarega o'tish
+// Text message handler for topup amount
+bot.on('text', async (ctx, next) => {
+  // Skip if not in topup flow or not a direct message
+  if (!ctx.session.topup || !ctx.message || !ctx.message.text) {
+    return next();
   }
-  
-  // Agar topup jarayoni boshlandi va bu xabar matn bo'lsa
-  if (ctx.message && ctx.message.text) {
-    if (ctx.session.topup.step === 'amount') {
-      const userId = ctx.from.id;
-      const text = ctx.message.text.trim();
-      const amount = parseInt(text);
-      
-      if (isNaN(amount) || amount < 1000) {
-        await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
-        return;
-      }
 
-      ctx.session.topup = {
-        step: 'method',
-        amount: amount
-      };
+  const userId = ctx.from.id;
+  const text = ctx.message.text.trim();
 
-      const keyboard = [
-        [Markup.button.callback('💳 Uzcard', 'topup:method:uzcard')],
-        [Markup.button.callback('💳 Humo', 'topup:method:humo')],
-        [Markup.button.callback('⬅️ Orqaga', 'back:account')]
-      ];
-
-      await sendOrUpdateMenu(ctx, `💳 To'lov usulini tanlang:\n💵 Summa: ${amount.toLocaleString()} so'm`, keyboard);
+  // To'ldirish summasi
+  if (ctx.session.topup.step === 'amount') {
+    const amount = parseInt(text);
+    if (isNaN(amount) || amount < 1000) {
+      await ctx.reply('❌ Iltimos, 1000 so\'mdan ko\'proq summa kiriting!');
       return;
     }
+
+    ctx.session.topup = {
+      step: 'method',
+      amount: amount
+    };
+
+    const keyboard = [
+      [Markup.button.callback('💳 Uzcard', 'topup:method:uzcard')],
+      [Markup.button.callback('💳 Humo', 'topup:method:humo')],
+      [Markup.button.callback('⬅️ Orqaga', 'back:account')]
+    ];
+
+    await sendOrUpdateMenu(ctx, `💳 To'lov usulini tanlang:\n💵 Summa: ${amount.toLocaleString()} so'm`, keyboard);
+  } else {
+    return next();
   }
-  
-  // Boshqa hollarda keyingi middlewarega o'tish
-  return next();
 });
 
 // To'lov usulini tanlash
@@ -2950,15 +2923,11 @@ bot.on('text', async (ctx) => {
     ctx.session.awaitingPromo = false;
     return;
   }
-  // Check if user is in the process of buying UC/PP or Premium/Stars
-  if (ctx.session.buying && (ctx.session.buying.type === 'pubg_uc' || ctx.session.buying.type === 'pubg_pp' || ctx.session.buying.type === 'premium' || ctx.session.buying.type === 'stars')) {
+  // Check if user is in the process of buying UC/PP
+  if (ctx.session.buying && (ctx.session.buying.type === 'pubg_uc' || ctx.session.buying.type === 'pubg_pp')) {
     const { type, amount, price } = ctx.session.buying;
     const username = ctx.message.text.trim();
-    let productType;
-    if (type === 'pubg_uc') productType = 'UC';
-    else if (type === 'pubg_pp') productType = 'PP';
-    else if (type === 'premium') productType = 'Telegram Premium';
-    else if (type === 'stars') productType = 'Telegram Stars';
+    const productType = type === 'pubg_uc' ? 'UC' : 'PP';
     const orderId = generateOrderId();
     const userId = ctx.from.id;
     const userBalance = getUserBalance(userId);
@@ -2968,7 +2937,7 @@ bot.on('text', async (ctx) => {
       const neededAmount = price - userBalance;
       const keyboard = [
         [Markup.button.callback('💳 Hisobni to\'ldirish', 'topup:amount')],
-        [Markup.button.callback('⬅️ Orqaga', type.startsWith('pubg_') ? `pubg:buy_${type.split('_')[1]}` : type === 'premium' ? 'premium:select' : 'stars:select')]
+        [Markup.button.callback('⬅️ Orqaga', `pubg:buy_${type.split('_')[1]}`)]
       ];
       
       return sendOrUpdateMenu(
@@ -2991,10 +2960,7 @@ bot.on('text', async (ctx) => {
       userId,
       userName: ctx.from.first_name,
       status: 'pending',
-      createdAt: new Date(),
-      productName: type === 'premium' ? `Telegram Premium ${amount} oy` : 
-                  type === 'stars' ? `${amount} ta Telegram Stars` :
-                  type === 'pubg_uc' ? `${amount} UC` : `${amount} PP`
+      createdAt: new Date()
     };
     
     // Initialize orders object if it doesn't exist
@@ -3399,11 +3365,9 @@ bot.use(async (ctx, next) => {
   if (!ctx.session.buying) {
     return next();  // buyurtma jarayoni boshlanmagan, keyingi middlewarega o'tish
   }
-  // Buyurtma jarayoni bo‘lsa, bu yerda ishlov berish mumkin
-
-  return next();  // keyingi middlewarega o‘tish
+  // Buyurtma jarayoni bo'lsa, bu yerda ishlov berish mumkin
+  return next();  // keyingi middlewarega o'tish
 });
-
 
 // Kanal ma'lumotlarini o'qish
 function getChannels() {
@@ -3850,7 +3814,7 @@ bot.action('back:premium_stars', async (ctx) => {
 });
 
 // Text message handler for price updates and card info
-bot.on('text', async (ctx, next) => {
+bot.on('text', async (ctx) => {
   // Handle price updates
   if (ctx.session && ctx.session.editingPrice) {
     const { type, key } = ctx.session.editingPrice;
@@ -4077,67 +4041,23 @@ if (process.env.RENDER) {
   console.log('💻 Polling rejimi ishga tushdi');
 }
 
-// Start komandasi - asosiy ishchi funksiya
-bot.start(async (ctx) => {
-  try {
-    // Foydalanuvchi ma'lumotlarini saqlash
-    saveUserInfo(ctx.from);
-    
-    // Asosiy menyuni ko'rsatish
-    await sendMainMenu(ctx);
-    
-    // Xush kelibsiz xabari
-    await ctx.reply('Salom! Botga xush kelibsiz! 🚀');
-  } catch (error) {
-    console.error('Start command error:', error);
-    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
-  }
-});
+// Bot boshlanishida xush kelibsiz xabari
+bot.start((ctx) => ctx.reply('Salom! Bot ishga tushdi ✅'));
 
 // shutdown funksiyasini aniqlash
-async function shutdown() {
-  try {
-    console.log('Bot to\'xtatilyapti...');
-    // Save any pending data
-    saveUsers(users);
-    // Close database connections if any
-    if (db) await db.close();
-    console.log('Xotira tozalandi');
-  } catch (error) {
-    console.error('To\'xtatishda xatolik:', error);
-  } finally {
-    process.exit(0);
-  }
+function shutdown() {
+  console.log('Bot to‘xtatilyapti...');
+  process.exit(0);
 }
 
 // Signal xabarlarini tutib olish
 process.on('SIGINT', () => {
-  console.log('SIGINT signal qabul qilindi');
-  bot.stop('SIGINT')
-    .then(() => shutdown())
-    .catch(err => {
-      console.error('SIGINT xatolik:', err);
-      process.exit(1);
-    });
+  bot.stop('SIGINT');
+  shutdown();
 });
 
 process.on('SIGTERM', () => {
-  console.log('SIGTERM signal qabul qilindi');
-  bot.stop('SIGTERM')
-    .then(() => shutdown())
-    .catch(err => {
-      console.error('SIGTERM xatolik:', err);
-      process.exit(1);
-    });
+  bot.stop('SIGTERM');
+  shutdown();
 });
 
-// Qo'shimcha xatoliklarni qo'llab-quvvatlash
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Qayta ishlanmagan rad etilgan va\'da:', promise, 'Sababi:', reason);
-});
-
-process.on('uncaughtException', (error) => {
-  console.error('Qo\'llab-quvvatlanmagan istisno:', error);
-  // Do not exit the process in production, just log the error
-  // process.exit(1);
-});
