@@ -861,9 +861,9 @@ async function sendAccountMenu(ctx) {
 }
 
 // --- Sozlamalar ---
-const UC_CHANNEL_URL = 'https://t.me/HOLYUCSERVIS';
-const ADMIN_USER = '@Garand_adminim';
-const ADMIN_IDS = [7990502958]; // admin ID lari
+const UC_CHANNEL_URL = 'https://t.me/suxa_cyber';
+const ADMIN_USER = '@suxacyber';
+const ADMIN_IDS = [5735723011]; // admin ID lari
 
 // Track all users who have started the bot
 if (!global.botUsers) {
@@ -1833,8 +1833,16 @@ bot.action(/admin:(.+)/, async (ctx) => {
       
       try {
         // Get all users from the database
-        const allUsers = Array.from(global.botUsers || new Set());
+        const allUsers = Object.keys(users);
         const totalUsers = allUsers.length;
+        
+        // Count new users today
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const newUsersToday = allUsers.filter(userId => {
+          const user = users[userId];
+          return user && user.join_date && new Date(user.join_date) >= today;
+        }).length;
         
         // Count active users (users who used the bot in the last 30 days)
         const thirtyDaysAgo = new Date();
@@ -1848,8 +1856,6 @@ bot.action(/admin:(.+)/, async (ctx) => {
         const totalRevenue = completedOrders.reduce((sum, order) => sum + (order.price || 0), 0);
         
         // Count today's orders and revenue
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
         const todayOrders = completedOrders.filter(order => {
           const orderDate = new Date(order.timestamp || 0);
           return orderDate >= today;
@@ -1864,6 +1870,7 @@ bot.action(/admin:(.+)/, async (ctx) => {
         // Format statistics message
         const statsMessage = `📊 *Bot Statistikasi*\n\n` +
           `👥 *Umumiy foydalanuvchilar:* ${totalUsers.toLocaleString()} ta\n` +
+          `🆕 *Bugungi yangi foydalanuvchilar:* ${newUsersToday} ta\n` +
           `🔄 *Faol foydalanuvchilar (30 kun):* ${Math.floor(totalUsers * 0.3).toLocaleString()} ta\n\n` +
           `📦 *Buyurtmalar:*\n` +
           `   • Jami: ${totalOrders.toLocaleString()} ta\n` +
@@ -2930,11 +2937,15 @@ bot.on('text', async (ctx) => {
     ctx.session.awaitingPromo = false;
     return;
   }
-  // Check if user is in the process of buying UC/PP
-  if (ctx.session.buying && (ctx.session.buying.type === 'pubg_uc' || ctx.session.buying.type === 'pubg_pp')) {
+  // Check if user is in the process of buying UC/PP or Premium/Stars
+  if (ctx.session.buying && (ctx.session.buying.type === 'pubg_uc' || ctx.session.buying.type === 'pubg_pp' || ctx.session.buying.type === 'premium' || ctx.session.buying.type === 'stars')) {
     const { type, amount, price } = ctx.session.buying;
     const username = ctx.message.text.trim();
-    const productType = type === 'pubg_uc' ? 'UC' : 'PP';
+    let productType;
+    if (type === 'pubg_uc') productType = 'UC';
+    else if (type === 'pubg_pp') productType = 'PP';
+    else if (type === 'premium') productType = 'Telegram Premium';
+    else if (type === 'stars') productType = 'Telegram Stars';
     const orderId = generateOrderId();
     const userId = ctx.from.id;
     const userBalance = getUserBalance(userId);
@@ -2944,7 +2955,7 @@ bot.on('text', async (ctx) => {
       const neededAmount = price - userBalance;
       const keyboard = [
         [Markup.button.callback('💳 Hisobni to\'ldirish', 'topup:amount')],
-        [Markup.button.callback('⬅️ Orqaga', `pubg:buy_${type.split('_')[1]}`)]
+        [Markup.button.callback('⬅️ Orqaga', type.startsWith('pubg_') ? `pubg:buy_${type.split('_')[1]}` : type === 'premium' ? 'premium:select' : 'stars:select')]
       ];
       
       return sendOrUpdateMenu(
@@ -2967,7 +2978,10 @@ bot.on('text', async (ctx) => {
       userId,
       userName: ctx.from.first_name,
       status: 'pending',
-      createdAt: new Date()
+      createdAt: new Date(),
+      productName: type === 'premium' ? `Telegram Premium ${amount} oy` : 
+                  type === 'stars' ? `${amount} ta Telegram Stars` :
+                  type === 'pubg_uc' ? `${amount} UC` : `${amount} PP`
     };
     
     // Initialize orders object if it doesn't exist
