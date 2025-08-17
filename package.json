@@ -4,8 +4,10 @@
   "description": "Telegraf bot with Express server",
   "main": "bot_new.js",
   "scripts": {
-    "start": "node bot_new.js",
-    "dev": "nodemon bot_new.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "start:polling": "node bot_new.js",
+    "dev:polling": "nodemon bot_new.js"
   },
   "keywords": ["telegraf", "bot", "telegram", "express"],
   "author": "",
