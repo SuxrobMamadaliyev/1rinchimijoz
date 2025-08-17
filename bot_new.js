@@ -1,7 +1,7 @@
 const { Telegraf, Markup, session } = require('telegraf');
 require('dotenv').config();
 const path = require('path');
-const mongoose = require('mongoose');
+const fs = require('fs');
 const express = require('express');
 
 // Rate limiting
@@ -88,59 +88,78 @@ if (!global.existingUsers) {
 }
 
 
-// Foydalanuvchi ma'lumotlarini saqlash funksiyasi
-async function saveUserInfo(userData) {
+// --- JSON ma'lumotlar bazasi ---
+const USERS_DB_PATH = path.join(__dirname, 'users.json');
+let usersDB = {};
+
+// Fayldan ma'lumotlarni o'qish
+try {
+  if (fs.existsSync(USERS_DB_PATH)) {
+    const data = fs.readFileSync(USERS_DB_PATH, 'utf-8');
+    usersDB = JSON.parse(data);
+  } else {
+    fs.writeFileSync(USERS_DB_PATH, JSON.stringify({}, null, 2));
+  }
+} catch (error) {
+  console.error('users.json faylini o\'qishda xatolik:', error);
+  usersDB = {}; // Xatolik bo'lsa, bo'sh obyekt bilan ishlash
+}
+
+// Ma'lumotlarni faylga saqlash (asinxron)
+async function saveUsersDB() {
   try {
-    const user = await User.findOneAndUpdate(
-      { id: userData.id },
-      {
-        $set: {
-          username: userData.username || '',
-          first_name: userData.first_name || '',
-          last_name: userData.last_name || '',
-          language_code: userData.language_code || '',
-          last_seen: new Date()
-        },
-        $setOnInsert: {
-          is_bot: userData.is_bot || false,
-          join_date: new Date(),
-          balance: 0
-        }
-      },
-      { upsert: true, new: true, setDefaultsOnInsert: true }
-    );
-    return user;
+    // Use fs.promises for async operations
+    await fs.promises.writeFile(USERS_DB_PATH, JSON.stringify(usersDB, null, 2));
   } catch (error) {
-    console.error('Error saving user info:', error);
-    return null;
+    console.error('users.json fayliga yozishda xatolik:', error);
   }
 }
 
-// User Schema for MongoDB
-const UserSchema = new mongoose.Schema({
-  id: { type: Number, required: true, unique: true },
-  username: { type: String, default: '' },
-  first_name: { type: String, default: '' },
-  last_name: { type: String, default: '' },
-  language_code: { type: String, default: '' },
-  is_bot: { type: Boolean, default: false },
-  join_date: { type: Date, default: Date.now },
-  balance: { type: Number, default: 0 },
-  last_seen: { type: Date, default: Date.now }
-});
+// Foydalanuvchi ma'lumotlarini saqlash funksiyasi
+async function saveUserInfo(userData) {
+  const userId = userData.id;
+  if (!usersDB[userId]) {
+    usersDB[userId] = {
+      id: userId,
+      username: userData.username || '',
+      first_name: userData.first_name || '',
+      last_name: userData.last_name || '',
+      language_code: userData.language_code || '',
+      is_bot: userData.is_bot || false,
+      join_date: new Date().toISOString(),
+      balance: 0,
+      last_seen: new Date().toISOString(),
+      referrals: []
+    };
+  } else {
+    usersDB[userId].username = userData.username || usersDB[userId].username;
+    usersDB[userId].first_name = userData.first_name || usersDB[userId].first_name;
+    usersDB[userId].last_name = userData.last_name || usersDB[userId].last_name;
+    usersDB[userId].last_seen = new Date().toISOString();
+  }
+  await saveUsersDB();
+}
 
-const User = mongoose.model('User', UserSchema);
+// Foydalanuvchi balansini olish
+async function getUserBalance(userId) {
+  if (usersDB[userId]) {
+    return usersDB[userId].balance || 0;
+  }
+  return 0;
+}
 
-// Connect to MongoDB
-mongoose.connect(process.env.MONGO_URI, {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-}).then(() => {
-  console.log('MongoDB connected successfully');
-}).catch(err => {
-  console.error('MongoDB connection error:', err);
-  process.exit(1);
-});
+// Foydalanuvchi balansini yangilash
+async function updateUserBalance(userId, amount) {
+  if (!usersDB[userId]) {
+    // If user doesn't exist, we can't update their balance.
+    // saveUserInfo should be called first.
+    console.error(`updateUserBalance: User with ID ${userId} not found.`);
+    return null;
+  }
+  usersDB[userId].balance += amount;
+  await saveUsersDB();
+  return usersDB[userId].balance;
+}
 
 // Start komandasi
 bot.start(async (ctx) => {
@@ -362,202 +381,36 @@ const CHANNELS = [
   }
 ];
 
-// Xabarlarni boshqarish uchun asosiy funksiya
 async function sendOrUpdateMenu(ctx, caption, keyboard) {
-  const greeting = `Assalomu alaykum, ${ctx.from?.first_name || 'foydalanuvchi'}!\n\n`;
-  
+  const options = { 
+    reply_markup: { inline_keyboard: keyboard }, 
+    parse_mode: 'Markdown' 
+  };
+
   try {
-    // Loading animatsiyasini to'xtatish
     if (ctx.callbackQuery) {
+      await ctx.answerCbQuery();
       try {
-        await ctx.answerCbQuery();
-      } catch (e) {
-        console.log('answerCbQuery xatoligi:', e.message);
-      }
-      
-      // Agar asosiy menyu bo'lsa
-      if (caption === 'Bo\'limni tanlang:') {
-        try {
-          // Avvalgi xabarni o'chirishga harakat qilamiz
-          try {
-            await ctx.deleteMessage();
-          } catch (e) {
-            console.log('Xabarni o\'chirib bo\'lmadi, yangi xabar yuborilmoqda...');
-          }
-          
-          // Rasm bilan yangi xabar yuborishga harakat qilamiz
-          try {
-            // Convert to absolute path
-            const absolutePath = path.resolve(MENU_IMAGE);
-            console.log('Trying to send image from:', absolutePath);
-            
-            // Check if file exists
-            if (!fs.existsSync(absolutePath)) {
-              console.error('Rasm fayli topilmadi:', absolutePath);
-              throw new Error(`Rasm fayli topilmadi: ${absolutePath}`);
-            }
-            
-            console.log('Rasm fayli mavjud, yuborilmoqda...');
-            
-            // Send photo with direct file path
-            try {
-              console.log('Attempting to send photo...');
-              await ctx.replyWithPhoto(
-                { source: fs.createReadStream(absolutePath) },
-                {
-                  caption: greeting + caption,
-                  ...Markup.inlineKeyboard(keyboard),
-                  parse_mode: 'Markdown'
-                }
-              );
-              console.log('Rasm muvaffaqiyatli yuborildi');
-              return;
-            } catch (sendError) {
-              console.error('Error sending photo:', sendError);
-              console.error('Error details:', {
-                message: sendError.message,
-                stack: sendError.stack,
-                response: sendError.response?.data || 'No response data'
-              });
-              throw sendError; // Re-throw to be caught by the outer catch
-            }
-          } catch (photoError) {
-            console.error('Rasm bilan xabar yuborishda xatolik:', photoError);
-            // Rasm bilan yuborib bo'lmasa, oddiy xabar sifatida yuborishga harakat qilamiz
-            await ctx.reply(greeting + caption, {
-              ...Markup.inlineKeyboard(keyboard),
-              parse_mode: 'Markdown'
-            });
-          }
-        } catch (error) {
-          console.error('Asosiy menyu yuborishda xatolik:', error);
-          // Xatolik yuz bersa, oddiy xabar sifatida yuborishga harakat qilamiz
-          try {
-            await ctx.reply(greeting + caption, {
-              ...Markup.inlineKeyboard(keyboard),
-              parse_mode: 'Markdown'
-            });
-          } catch (e) {
-            console.error('Alternativ xabar yuborishda xatolik:', e);
-          }
-        }
-      } else {
-        // Try to handle message editing or sending new message
-        const message = ctx.callbackQuery?.message;
-        const messageId = message?.message_id;
-        const chatId = ctx.chat?.id || message?.chat?.id;
-        
-        // Check if we can edit this message (it must have text and be in a chat where we can edit messages)
-        const canEditMessage = messageId && chatId && 
-                             (message?.text || message?.caption) && 
-                             !message?.photo; // Don't try to edit photo captions
-        
-        // First try to edit the existing message if possible
-        if (canEditMessage) {
-          try {
-            await ctx.telegram.editMessageText(
-              chatId,
-              messageId,
-              null, // inline_message_id
-              caption,
-              {
-                reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
-                parse_mode: 'Markdown'
-              }
-            );
-            return; // Successfully edited, we're done
-          } catch (editError) {
-            console.error('Xabarni tahrirlashda xatolik:', editError.message);
-            // Continue to fallback method
-          }
-        }
-        
-        // If we can't edit, try to delete the old message and send a new one
-        try {
-          // Try to delete the old message if it exists
-          if (messageId) {
-            try { 
-              await ctx.telegram.deleteMessage(chatId, messageId);
-            } catch (deleteError) {
-              console.log('Eski xabarni o\'chirib bo\'lmadi:', deleteError.message);
-              // Continue even if delete fails
-            }
-          }
-          
-          // Try to send a new message with full formatting
-          try {
-            await ctx.reply(caption, {
-              reply_markup: Markup.inlineKeyboard(keyboard).reply_markup,
-              parse_mode: 'Markdown'
-            });
-          } catch (replyError) {
-            console.error('Formatlangan xabar yuborishda xatolik:', replyError);
-            
-            // If that fails, try sending just the text with keyboard
-            try {
-              await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
-            } catch (simpleError) {
-              console.error('Oddiy xabar yuborishda ham xatolik:', simpleError);
-              
-              // Last resort: try to send just the text
-              try {
-                await ctx.reply(caption);
-              } catch (finalError) {
-                console.error('Faqat matn yuborishda ham xatolik:', finalError);
-              }
-            }
-          }
-        } catch (mainError) {
-          console.error('Xabar yuborishda asosiy xatolik:', mainError);
-        }
-      }
-    } else {
-      // Yangi suhbat boshlanganda
-      if (caption === 'Bo\'limni tanlang:') {
-        try {
-          const greeting = `Assalomu alaykum, ${ctx.from.first_name || 'foydalanuvchi'}!\n\n`;
-          const absolutePath = path.resolve(MENU_IMAGE);
-          console.log('Trying to send image from (second instance):', absolutePath);
-          
-          // Check if file exists
-          if (!fs.existsSync(absolutePath)) {
-            console.error('Rasm fayli topilmadi (second instance):', absolutePath);
-            throw new Error(`Rasm fayli topilmadi: ${absolutePath}`);
-          }
-          
-          console.log('Rasm fayli mavjud, yuborilmoqda (second instance)...');
-          
-          try {
-            await ctx.replyWithPhoto(
-              { source: absolutePath },
-              {
-                caption: greeting + caption,
-                ...Markup.inlineKeyboard(keyboard),
-                parse_mode: 'Markdown'
-              }
-            );
-          } catch (error) {
-            console.error('Rasm yuborishda xatolik (second instance):', error);
-            throw error; // Re-throw to be caught by the outer catch block
-          }
-        } catch (error) {
-          console.error('Rasm yuklanmadi:', error);
-          await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
-        }
-      } else {
-        await ctx.reply(caption, Markup.inlineKeyboard(keyboard));
-      }
+        // Rasm bilan birga kelgan xabarni tahrirlab bo'lmaydi,
+        // shuning uchun avval o'chirib, keyin yangisini yuboramiz.
+        await ctx.deleteMessage();
+      } catch (e) { /* ignore */ }
     }
+
+    // Rasm bilan yangi xabar yuborish
+    await ctx.replyWithPhoto({ source: MENU_IMAGE }, { caption, ...options });
+
   } catch (error) {
-    console.error('Xatolik yuz berdi:', error);
+    console.error(`sendOrUpdateMenu (photo) xatosi: ${error.message}. Matnli rejimga o'tilmoqda.`);
     try {
-      // Last resort: try to send a simple message
-      await ctx.reply(caption);
-    } catch (e) {
-      console.error('Xabar yuborib bo\'lmadi:', e);
+      // Rasm yuborishda xatolik bo'lsa, matnli xabar yuborish
+      await ctx.reply(caption, options);
+    } catch (fallbackError) {
+      console.error(`sendOrUpdateMenu (fallback) xatosi: ${fallbackError.message}`);
+      await ctx.reply('Menyuni ko\'rsatishda xatolik yuz berdi. Iltimos, /start buyrug\'ini bosing.');
     }
   }
-} // End of sendOrUpdateMenu function
+}
 
 // Asosiy menyuda ko'rinadigan tugmalar nomlari
 const MAIN_MENU = [
@@ -570,107 +423,29 @@ const MAIN_MENU = [
   'Admen paneli',
 ];
 
-// User balances and referral system are now initialized at the top of the file
+const sendMainMenu = async (ctx) => {
+  const greeting = `Assalomu alaykum, ${ctx.from?.first_name || 'foydalanuvchi'}!\n\nBo'limni tanlang:`;
+  const menuItems = [...MAIN_MENU];
 
-// /start yoki asosiy menyu ko'rsatish
-async function sendMainMenu(ctx) {
-  // Asosiy menyu tugmalarini yaratamiz
-  try {
-    // Avval obunani tekshirish
-    const checkResult = await checkUserSubscription(ctx);
-    
-    // Agar obuna bo'lmagan bo'lsa yoki bot kanalga kira olmasa, obuna bo'lish sahifasiga yo'naltiramiz
-    if (!checkResult.subscribed || checkResult.hasAccessError) {
-      return await sendSubscriptionMessage(ctx, checkResult);
+  if (!isAdmin(ctx)) {
+    const adminIndex = menuItems.indexOf('Admen paneli');
+    if (adminIndex > -1) {
+      menuItems.splice(adminIndex, 1);
     }
-    
-    // Agar obuna bo'lgan bo'lsa, asosiy menyuni ko'rsatamiz
-    const menuItems = [...MAIN_MENU]; // Asl massivni o'zgartirmaslik uchun nusxalaymiz
-  
-    // Admin panelini faqat adminlar uchun ko'rsatamiz
-    if (!isAdmin(ctx)) {
-      const adminIndex = menuItems.indexOf('Admen paneli');
-      if (adminIndex > -1) {
-        menuItems.splice(adminIndex, 1);
-      }
-    }
-    
-    const keyboard = menuItems.map((text) => {
-      if (text === 'UC Shop') {
-        return [Markup.button.url(text, UC_CHANNEL_URL)];
-      }
-      return [Markup.button.callback(text, `menu:${text}`)];
-    });
-    
-    // Agar obuna bo'lmagan bo'lsa, tekshirish tugmasini qo'shamiz
-    if (!checkResult.subscribed) {
-      keyboard.push([Markup.button.callback('✅ Obunani tekshirish', 'check_subscription')]);
-    }
-    
-    // Always send a new message instead of editing to avoid message editing issues
-    try {
-      // Try to delete any existing message first
-      try {
-        if (ctx.callbackQuery) {
-          await ctx.deleteMessage();
-        }
-      } catch (e) {
-        // Ignore if we can't delete the old message
-      }
-      
-      // Send menu image with the main menu
-      try {
-        await ctx.replyWithPhoto({
-          source: fs.createReadStream(MENU_IMAGE)
-        }, {
-          caption: 'Bo\'limni tanlang:',
-          reply_markup: {
-            inline_keyboard: keyboard
-          },
-          parse_mode: 'Markdown'
-        });
-      } catch (photoError) {
-        console.error('Rasm yuborishda xatolik:', photoError);
-        // If image sending fails, send text menu as fallback
-        await ctx.reply('Bo\'limni tanlang:', {
-          reply_markup: {
-            inline_keyboard: keyboard
-          },
-          parse_mode: 'Markdown'
-        });
-      }
-    } catch (error) {
-      console.error('Error sending main menu:', error);
-      // Fallback to a simple message if there's an error
-      await ctx.reply('Iltimos, asosiy menyuni qayta yuklash uchun /start buyrug\'ini bosing.');
-    }
-  } catch (error) {
-    console.error('sendMainMenu xatosi:', error);
-    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
   }
+
+  const keyboard = menuItems.map((text) => {
+    if (text === 'UC Shop') {
+      return [Markup.button.url(text, UC_CHANNEL_URL)];
+    }
+    return [Markup.button.callback(text, `menu:${text}`)];
+  });
+
+  await sendOrUpdateMenu(ctx, greeting, keyboard);
 };
 
 
 
-bot.start((ctx) => {
-  try {
-    // Add user to our tracking set
-    if (ctx.from && ctx.from.id) {
-      global.botUsers.add(ctx.from.id);
-      // Save user information
-      saveUserInfo(ctx.from);
-    }
-    
-    // Handle referral link if present
-    handleReferral(ctx);
-    
-    // Show main menu
-    sendMainMenu(ctx);
-  } catch (error) {
-    console.error('Error in start command:', error);
-    ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
-  }
-});
 
 // Inline tugma bosilganda
 bot.action(/menu:(.+)/, async (ctx) => {
@@ -687,7 +462,7 @@ bot.action(/menu:(.+)/, async (ctx) => {
       
       // Since we're not tracking referrals anymore, we'll show 0
       // In a real implementation, you might want to track this in users.json
-      const referralCount = 0;
+      const referralCount = usersDB[userId]?.referrals?.length || 0;
       
       const totalEarned = referralCount * REFERRAL_BONUS;
       const message = `💰 *Pul ishlash* 💰\n\n` +
@@ -1086,7 +861,6 @@ try {
 }
 
 // Foydalanuvchilar balansi (aslida bu ma'lumotlar bazasida saqlanishi kerak)
-const userBalances = {};
 
 // Buyurtma yaratish uchun handler
 bot.action(/buy:(premium|stars):(\d+):(\d+)/, async (ctx) => {
@@ -1327,37 +1101,53 @@ async function sendEarnMoneyMenu(ctx) {
 // Handle start with referral
 const handleReferral = async (ctx) => {
   try {
-    console.log('Referral link detected, checking...');
     const startPayload = ctx.message?.text?.split(' ')[1];
-    if (!startPayload || !startPayload.startsWith('ref')) {
-      console.log('No valid referral payload found');
-      return;
+    if (!startPayload || !startPayload.startsWith('ref')) return;
+
+    const referrerId = parseInt(startPayload.substring(3));
+    const newUser = ctx.from;
+
+    // 1. O'zini-o'zi taklif qilishni tekshirish
+    if (referrerId === newUser.id) return;
+
+    // 2. Taklif qiluvchi mavjudligini tekshirish
+    if (!usersDB[referrerId]) return;
+
+    // 3. Yangi foydalanuvchi avval ro'yxatdan o'tganmi?
+    // Agar foydalanuvchi mavjud bo'lsa va uning referali allaqachon qayd etilgan bo'lsa, chiqib ketamiz
+    if (usersDB[newUser.id] && usersDB[newUser.id].referred_by) return;
+
+    // 4. Bonus berish
+    await updateUserBalance(referrerId, REFERRAL_BONUS);
+    
+    // 5. Referalni qayd etish
+    if (!usersDB[referrerId].referrals) {
+        usersDB[referrerId].referrals = [];
     }
-    
-    const referrerId = parseInt(startPayload.replace('ref', ''));
-    const userId = ctx.from.id;
-    
-    console.log(`Referral check - Referrer: ${referrerId}, New User: ${userId}`);
-    
-    // Don't count if user is referring themselves
-    if (referrerId === userId) {
-      console.log(`User ${userId} tried to refer themselves`);
-      return;
+    usersDB[referrerId].referrals.push(newUser.id);
+    usersDB[newUser.id].referred_by = referrerId; // Yangi foydalanuvchini kim taklif qilganini belgilash
+
+    await saveUsersDB();
+
+    // 6. Taklif qiluvchiga xabar yuborish
+    try {
+      await ctx.telegram.sendMessage(
+        referrerId,
+        `🎉 Tabriklaymiz! Siz ${newUser.first_name} (@${newUser.username || 'N/A'}) ni taklif qilganingiz uchun ${REFERRAL_BONUS} so'm bonus oldingiz!`
+      );
+    } catch (e) {
+      console.error(`Referal bonusi haqida xabar yuborishda xatolik: ${e.message}`);
     }
-    
-    } catch (error) {
-      console.error('Error in referral handling:', error);
-      // Don't notify the user, just log the error
-    }
+
+  } catch (error) {
+    console.error('Referalni qayta ishlashda xatolik:', error);
   }
+};
 
   // Matnli xabarlarni qayta ishlash
 bot.on('text', async (ctx, next) => {
   // Check for subscription first
-  if (!(await isSubscribed(ctx))) {
-    return; // Stop processing if not subscribed
-  }
-
+  
   // Save user info on every message
   await saveUserInfo(ctx.from);
 
@@ -1412,14 +1202,17 @@ bot.on('text', async (ctx, next) => {
 
       const adminKeyboard = Markup.inlineKeyboard([
         Markup.button.callback('✅ Tasdiqlash', `admin_confirm:${orderId}`),
-        Markup.button.callback('❌ Bekor qilish', `admin_cancel:${orderId}`)
+        Markup.button.callback('❌ Rad etish', `admin_reject:${orderId}`)
       ]);
 
       for (const adminId of ADMIN_IDS) {
         try {
-          await ctx.telegram.sendMessage(adminId, adminMessage, { parse_mode: 'MarkdownV2', ...adminKeyboard });
+          await bot.telegram.sendMessage(adminId, adminMessage, { 
+            reply_markup: adminKeyboard.reply_markup,
+            parse_mode: 'Markdown'
+          });
         } catch (e) {
-          console.error(`Admin ${adminId} ga xabar yuborishda xatolik:`, e);
+          console.error(`Admin xabari yuborilmadi ${adminId}: ${e.message}`);
         }
       }
 
