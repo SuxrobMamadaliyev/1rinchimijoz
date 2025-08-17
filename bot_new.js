@@ -3830,6 +3830,25 @@ bot.on('text', async (ctx, next) => {
   return next();
 });
 
+// /start komandasi uchun handler
+bot.command('start', async (ctx) => {
+  try {
+    // Avval obunani tekshirish
+    const checkResult = await checkUserSubscription(ctx);
+    
+    // Agar obuna bo'lmagan bo'lsa, obuna bo'lish sahifasiga yo'naltirish
+    if (!checkResult.subscribed) {
+      return await sendSubscriptionMessage(ctx, checkResult);
+    }
+    
+    // Aks holda asosiy menyuni ko'rsatish
+    return await sendMainMenu(ctx);
+  } catch (error) {
+    console.error('Start command error:', error);
+    await ctx.reply('Xatolik yuz berdi. Iltimos, qaytadan urinib ko\'ring.');
+  }
+});
+
 // Obunani tekshirish
 bot.action('check_subscription', async (ctx) => {
   try {
