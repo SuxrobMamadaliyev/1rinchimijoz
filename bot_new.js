@@ -1511,7 +1511,6 @@ bot.on('text', async (ctx, next) => {
 // O'yin narxlari menyusi va handlerlari o'chirildi
 
 // Webhook configuration for Render deployment
-const express = require('express');
 const app = express();
 const path = require('path');
 const url = require('url');
