@@ -1512,8 +1512,6 @@ bot.on('text', async (ctx, next) => {
 
 // Webhook configuration for Render deployment
 const app = express();
-const path = require('path');
-const url = require('url');
 
 // Middleware
 app.use(express.json());
