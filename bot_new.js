@@ -62,7 +62,7 @@ bot.use(async (ctx, next) => {
         const member = await ctx.telegram.getChatMember(`@${channel}`, userId);
         if (member.status === 'left' || member.status === 'kicked') {
           console.log(`User ${userId} is not subscribed to @${channel}`);
-          await ctx.reply(`Iltimos, avval @${channel} kanaliga obuna bo'ling!`);
+          await ctx.reply(`Iltimos, avval @${channel} kanaliga obuna bo'ling !`);
           return; // Skip processing if not subscribed
         }
       } catch (error) {
@@ -3963,18 +3963,47 @@ const sendSubscriptionMessage = async (ctx, checkResult = null) => {
     
     message += 'Botdan to\'liq foydalanish uchun quyidagi kanallarga a\'zo bo\'ling:\n\n';
     
-    const buttons = channels.map(channel => [
-      Markup.button.url(`📢 ${channel.username} kanaliga obuna bo'lish`, channel.link)
+    // Create inline keyboard with channel buttons
+    const inlineKeyboard = [];
+    
+    // Add each channel as an inline URL button
+    channels.forEach(channel => {
+      inlineKeyboard.push([
+        { text: `📢 ${channel.username} kanali`, url: channel.link }
+      ]);
+    });
+    
+    // Add check subscription button
+    inlineKeyboard.push([
+      { text: '✅ Obunani tekshirish', callback_data: 'check_subscription' }
     ]);
     
-    buttons.push([Markup.button.callback('✅ Obunani tekshirish', 'check_subscription')]);
-    
-    await sendOrUpdateMenu(
-      ctx,
-      message +
-      'Botdan foydalanish uchun quyidagi kanallarga obuna bo\'lishingiz kerak:',
-      buttons
-    );
+    // Send the message with inline keyboard
+    try {
+      await ctx.telegram.sendMessage(
+        ctx.chat.id,
+        message + 'Quyidagi tugmalar orqali kanallarga obuna bo\'ling:',
+        {
+          parse_mode: 'Markdown',
+          reply_markup: {
+            inline_keyboard: inlineKeyboard
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Xabar yuborishda xatolik:', error);
+      // Fallback to old method if inline keyboard fails
+      const buttons = channels.map(channel => [
+        Markup.button.url(`📢 ${channel.username} kanaliga obuna bo'lish`, channel.link)
+      ]);
+      buttons.push([Markup.button.callback('✅ Obunani tekshirish', 'check_subscription')]);
+      
+      await sendOrUpdateMenu(
+        ctx,
+        message + 'Quyidagi kanallarga obuna bo\'ling:',
+        buttons
+      );
+    }
   } catch (error) {
     console.error('Obuna xabarini yuborishda xatolik:', error);
     // Xatolik yuz berganda ham foydalanuvchiga tushunarli xabar qaytaramiz
@@ -4734,13 +4763,33 @@ bot.on('text', async (ctx, next) => {
 
  // Launch the bot only in polling mode when webhook is not configured
  const hasWebhookBaseUrl = !!(process.env.WEBHOOK_URL || process.env.RENDER_EXTERNAL_URL);
+ let BOT_LAUNCHED = false;
  if (!hasWebhookBaseUrl) {
-   bot.launch();
+   bot.launch()
+     .then(() => {
+       BOT_LAUNCHED = true;
+       console.log('Bot launched in polling mode');
+     })
+     .catch((err) => {
+       console.error('Failed to launch bot in polling mode:', err);
+     });
  }
 
   // Graceful shutdown
- process.once('SIGINT', () => bot.stop('SIGINT'));
- process.once('SIGTERM', () => bot.stop('SIGTERM'));
+ process.once('SIGINT', () => {
+   try {
+     if (BOT_LAUNCHED) bot.stop('SIGINT');
+   } catch (e) {
+     console.error('Error stopping bot on SIGINT:', e);
+   }
+ });
+ process.once('SIGTERM', () => {
+   try {
+     if (BOT_LAUNCHED) bot.stop('SIGTERM');
+   } catch (e) {
+     console.error('Error stopping bot on SIGTERM:', e);
+   }
+ });
 
  // Export bot for server.js to attach webhook
  module.exports = bot;
