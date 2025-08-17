@@ -3,8 +3,7 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 
-// Require the bot instance (bot_new.js exports the bot)
-const bot = require('./bot_new');
+// Do NOT require the bot here to avoid crashing before binding the port.
 
 const app = express();
 app.use(express.json());
@@ -28,15 +27,21 @@ app.get('/index.html', (req, res, next) => {
   }
 });
 
-// Webhook endpoint for Telegram (optional; enabled when WEBHOOK_URL or RENDER_EXTERNAL_URL is set)
+// Webhook endpoint for Telegram (handler will be attached after bot is initialized)
 const WEBHOOK_PATH = '/webhook';
-app.post(WEBHOOK_PATH, bot.webhookCallback(WEBHOOK_PATH));
+let bot; // will be set after initialization
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`HTTP server listening on port ${PORT}`);
 
   try {
+    // Initialize bot after server starts so port binds even if bot init fails
+    bot = require('./bot_new');
+
+    // Attach webhook handler now that bot exists
+    app.post(WEBHOOK_PATH, bot.webhookCallback(WEBHOOK_PATH));
+
     const baseUrl = process.env.WEBHOOK_URL || process.env.RENDER_EXTERNAL_URL;
     if (baseUrl) {
       const fullWebhookUrl = `${baseUrl.replace(/\/$/, '')}${WEBHOOK_PATH}`;
